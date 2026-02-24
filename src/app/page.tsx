@@ -24,6 +24,7 @@ import {
   type ConfidenceResult,
 } from "@/lib/mock-sec-service";
 import SectorHeatMap from "@/components/SectorHeatMap";
+import EducationStation from "@/components/EducationStation";
 
 function formatDollars(value: number): string {
   if (value >= 1_000_000) return `$${(value / 1_000_000).toFixed(1)}M`;
@@ -377,11 +378,11 @@ export default function Home() {
                   </p>
                   <div className="max-h-[400px] space-y-3 overflow-y-auto">
                     {activityFeed.length > 0 ? (
-                      activityFeed.map((trade) => {
+                      activityFeed.map((trade, idx) => {
                         const rating = getInsiderRating(trade.insiderName);
                         return (
                           <div
-                            key={`${trade.insiderName}-${trade.date}`}
+                            key={`${trade.insiderName}-${trade.date}-${trade.sharesTraded}-${idx}`}
                             className="rounded-lg border border-slate-800/50 bg-slate-950/50 p-4"
                           >
                             <div className="flex items-start justify-between">
@@ -532,7 +533,7 @@ export default function Home() {
                 <tbody>
                   {globalBuys.map((trade, i) => (
                     <tr
-                      key={`${trade.ticker}-${trade.insiderName}`}
+                      key={`${trade.ticker}-${trade.insiderName}-${trade.sharesTraded}-${i}`}
                       className="border-b border-slate-800/50 last:border-0"
                     >
                       <td className="py-3 text-slate-500">{i + 1}</td>
@@ -581,7 +582,7 @@ export default function Home() {
                 <tbody>
                   {globalSells.map((trade, i) => (
                     <tr
-                      key={`${trade.ticker}-${trade.insiderName}`}
+                      key={`${trade.ticker}-${trade.insiderName}-${trade.sharesTraded}-${i}`}
                       className="border-b border-slate-800/50 last:border-0"
                     >
                       <td className="py-3 text-slate-500">{i + 1}</td>
@@ -606,6 +607,9 @@ export default function Home() {
 
         {/* ── SECTOR HEAT MAP ── */}
         <SectorHeatMap />
+
+        {/* ── EDUCATION STATION ── */}
+        <EducationStation />
       </main>
 
       {/* Footer */}
