@@ -96,7 +96,7 @@ const SELLING_TIERS: Record<number, { card: string; glow: string }> = {
 function getTierStyles(s: SectorSentiment) {
   if (s.direction === "neutral" || s.glowLevel === 0) {
     return {
-      card: "border-slate-800 bg-slate-900",
+      card: "border-white/10 bg-slate-950/60",
       glow: "",
       label: "text-slate-400",
       flow: "text-slate-500",
@@ -142,7 +142,7 @@ export default function SectorHeatMap() {
           return (
             <div
               key={s.sector}
-              className={`rounded-xl border p-4 transition-all ${styles.card} ${styles.glow}`}
+              className={`rounded-xl border p-4 transition-all backdrop-blur-md ${styles.card} ${styles.glow}`}
             >
               {/* Sector name + icon */}
               <div className="mb-2 flex items-center gap-2">

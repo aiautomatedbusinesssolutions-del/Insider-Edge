@@ -41,7 +41,7 @@ export default function EducationStation() {
         {LESSONS.map((lesson) => (
           <div
             key={lesson.title}
-            className="group relative rounded-xl border border-emerald-500/20 bg-slate-900/50 p-6 transition-colors hover:border-emerald-500/40"
+            className="group relative rounded-xl border border-emerald-500/20 bg-slate-950/60 backdrop-blur-md p-6 transition-colors hover:border-emerald-500/40"
           >
             {/* Emerald glow — visible on hover */}
             <div className="pointer-events-none absolute inset-0 rounded-xl bg-emerald-500/[0.03] transition-opacity group-hover:bg-emerald-500/[0.06]" />

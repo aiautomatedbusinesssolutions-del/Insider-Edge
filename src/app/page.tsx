@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { motion, AnimatePresence } from "motion/react";
 import {
   Search,
   TrendingUp,
@@ -25,6 +26,9 @@ import {
 } from "@/lib/mock-sec-service";
 import SectorHeatMap from "@/components/SectorHeatMap";
 import EducationStation from "@/components/EducationStation";
+import RadialGauge from "@/components/charts/RadialGauge";
+import { SkeletonCard, SkeletonFeed } from "@/components/ui/Skeleton";
+import MotionSection from "@/components/ui/MotionSection";
 
 function formatDollars(value: number): string {
   if (value >= 1_000_000) return `$${(value / 1_000_000).toFixed(1)}M`;
@@ -37,6 +41,7 @@ export default function Home() {
   const [tickerTrades, setTickerTrades] = useState<ProcessedTrade[]>([]);
   const [confidence, setConfidence] = useState<ConfidenceResult | null>(null);
   const [searched, setSearched] = useState(false);
+  const [loading, setLoading] = useState(false);
   const [extendedSearch, setExtendedSearch] = useState(false);
   const [loadingExtended, setLoadingExtended] = useState(false);
 
@@ -51,10 +56,16 @@ export default function Home() {
   function handleSearch(e: React.FormEvent) {
     e.preventDefault();
     if (!query.trim()) return;
-    setTickerTrades(getProcessedTrades(query));
-    setConfidence(calculateConfidenceScore(query));
+    setLoading(true);
     setSearched(true);
     setExtendedSearch(false);
+
+    // Ensure skeleton is visible for at least 400ms
+    setTimeout(() => {
+      setTickerTrades(getProcessedTrades(query));
+      setConfidence(calculateConfidenceScore(query));
+      setLoading(false);
+    }, 400);
   }
 
   async function handleCheckOlder() {
@@ -67,12 +78,10 @@ export default function Home() {
       if (res.ok) {
         const data = await res.json();
         if (data.trades && data.trades.length > 0) {
-          // Real parsed trades came back — load them into the UI
           setTickerTrades(data.trades);
           setConfidence(data.confidence);
           setExtendedSearch(true);
         } else {
-          // Filings exist but no parseable transactions
           setExtendedSearch(true);
         }
       }
@@ -113,7 +122,7 @@ export default function Home() {
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search any stock ticker (e.g. TSLA)"
-            className="w-full rounded-xl border border-slate-800 bg-slate-900 py-4 pl-12 pr-4 text-base text-slate-100 placeholder-slate-500 outline-none transition-colors focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
+            className="w-full rounded-xl border border-white/10 bg-slate-950/60 backdrop-blur-md py-4 pl-12 pr-4 text-base text-slate-100 placeholder-slate-500 outline-none transition-colors focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
           />
         </div>
         {!searched && (
@@ -125,491 +134,452 @@ export default function Home() {
 
       <main className="mx-auto max-w-6xl px-4 py-8">
         {/* ── MIDDLE ROW: Confidence Score + Ticker Activity Feed ── */}
-        {searched && (
-          <>
-            {tickerTrades.length === 0 ? (
-              <div className="mb-8 grid grid-cols-1 gap-6 md:grid-cols-2">
-                {/* Neutral Confidence Score */}
-                <div className="rounded-xl border border-slate-800 bg-slate-900 p-6">
-                  <div className="mb-4 flex items-center gap-2">
-                    <Gauge className="h-5 w-5 text-sky-400" />
-                    <h2 className="text-lg font-semibold text-slate-100">
-                      Confidence Score
-                    </h2>
-                    <span className="ml-auto rounded bg-sky-500/10 px-2 py-0.5 text-xs font-medium text-sky-400">
-                      {query.toUpperCase()}
-                    </span>
-                  </div>
+        <AnimatePresence mode="wait">
+          {loading && searched && (
+            <motion.div
+              key="skeleton"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              transition={{ duration: 0.3 }}
+              className="mb-8 grid grid-cols-1 gap-6 md:grid-cols-2"
+            >
+              <SkeletonCard />
+              <SkeletonFeed />
+            </motion.div>
+          )}
 
-                  {/* Neutral gauge at 50 */}
-                  <div className="flex flex-col items-center py-4">
-                    <div className="relative h-40 w-40">
-                      <svg
-                        viewBox="0 0 120 120"
-                        className="h-full w-full -rotate-90"
-                      >
-                        <circle
-                          cx="60" cy="60" r="52"
-                          fill="none" stroke="currentColor" strokeWidth="10"
-                          className="text-slate-800"
-                        />
-                        <circle
-                          cx="60" cy="60" r="52"
-                          fill="none" stroke="currentColor" strokeWidth="10"
-                          strokeLinecap="round"
-                          strokeDasharray={`${(50 / 100) * 327} 327`}
-                          className="text-amber-400"
-                        />
-                      </svg>
-                      <div className="absolute inset-0 flex flex-col items-center justify-center">
-                        <span className="text-4xl font-bold text-amber-400">50</span>
-                        <span className="text-xs text-slate-400">/ 100</span>
-                      </div>
-                    </div>
-                    <span className="mt-3 rounded-full bg-amber-500/20 px-4 py-1 text-sm font-semibold text-amber-400">
-                      Neutral
-                    </span>
-                  </div>
-
-                  <div className="mt-4 mb-5">
-                    <div className="flex h-2.5 w-full overflow-hidden rounded-full bg-slate-800">
-                      <div className="bg-amber-400 transition-all duration-500" style={{ width: "50%" }} />
-                    </div>
-                    <div className="mt-1.5 flex justify-between text-[10px] text-slate-500">
-                      <span>0 — Caution</span>
-                      <span>50 — Neutral</span>
-                      <span>100 — High</span>
-                    </div>
-                  </div>
-
-                  <div className="space-y-2 border-t border-slate-800 pt-4">
-                    <p className="text-xs font-medium uppercase tracking-wider text-slate-500">
-                      Signals
-                    </p>
-                    <div className="flex items-start gap-2 text-sm">
-                      <Coffee className="mt-0.5 h-4 w-4 shrink-0 text-amber-400" />
-                      <span className="text-slate-300">
-                        Insiders are standing pat. No recent conviction signals detected.
+          {!loading && searched && (
+            <motion.div
+              key={query}
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              transition={{ duration: 0.4 }}
+            >
+              {tickerTrades.length === 0 ? (
+                <div className="mb-8 grid grid-cols-1 gap-6 md:grid-cols-2">
+                  {/* Neutral Confidence Score */}
+                  <div className="rounded-xl border border-white/10 bg-slate-950/60 backdrop-blur-md p-6">
+                    <div className="mb-4 flex items-center gap-2">
+                      <Gauge className="h-5 w-5 text-sky-400" />
+                      <h2 className="text-lg font-semibold text-slate-100">
+                        Confidence Score
+                      </h2>
+                      <span className="ml-auto rounded bg-sky-500/10 px-2 py-0.5 text-xs font-medium text-sky-400">
+                        {query.toUpperCase()}
                       </span>
                     </div>
-                  </div>
-                </div>
 
-                {/* No Activity Feed */}
-                <div className="rounded-xl border border-slate-800 bg-slate-900 p-6">
-                  <div className="mb-4 flex items-center gap-2">
-                    <Activity className="h-5 w-5 text-sky-400" />
-                    <h2 className="text-lg font-semibold text-slate-100">
-                      Ticker Activity Feed
-                    </h2>
-                    <span className="ml-auto rounded bg-sky-500/10 px-2 py-0.5 text-xs font-medium text-sky-400">
-                      {query.toUpperCase()}
-                    </span>
-                  </div>
+                    {/* Radial Gauge at neutral 50 */}
+                    <RadialGauge score={50} />
+                    <div className="flex justify-center">
+                      <span className="rounded-full bg-amber-500/20 px-4 py-1 text-sm font-semibold text-amber-400">
+                        Neutral
+                      </span>
+                    </div>
 
-                  <div className="flex flex-col items-center py-8 text-center">
-                    <Clock className="mb-3 h-10 w-10 text-slate-700" />
-                    <p className="text-sm text-slate-400">
-                      No insider trades reported in the last 90 days.
-                    </p>
-                    <p className="mt-2 max-w-xs text-xs text-slate-500">
-                      This is common for mid-cap stocks during earnings blackout
-                      periods. Insiders are often restricted from trading before
-                      quarterly reports.
-                    </p>
-
-                    {/* Extended search found filings but no parseable trades */}
-                    {extendedSearch && (
-                      <div className="mt-4 rounded-lg border border-sky-500/20 bg-sky-500/5 px-4 py-3">
-                        <p className="text-xs text-sky-400">
-                          Form 4 filings exist for the last 6 months but
-                          contained no standard buy/sell transactions to display.
-                        </p>
+                    <div className="mt-4 mb-5">
+                      <div className="flex h-2.5 w-full overflow-hidden rounded-full bg-slate-800">
+                        <div className="bg-amber-400 transition-all duration-500" style={{ width: "50%" }} />
                       </div>
-                    )}
+                      <div className="mt-1.5 flex justify-between text-[10px] text-slate-500">
+                        <span>0 — Caution</span>
+                        <span>50 — Neutral</span>
+                        <span>100 — High</span>
+                      </div>
+                    </div>
 
-                    {/* Check Older button */}
-                    {!extendedSearch && (
-                      <button
-                        type="button"
-                        onClick={handleCheckOlder}
-                        disabled={loadingExtended}
-                        className="mt-4 flex items-center gap-2 rounded-lg border border-slate-700 bg-slate-800 px-4 py-2 text-sm text-slate-300 transition-colors hover:border-sky-500/50 hover:text-sky-400 disabled:opacity-50"
-                      >
-                        <Clock className="h-4 w-4" />
-                        {loadingExtended
-                          ? "Checking..."
-                          : "Check Older (Last 6 Months)"}
-                      </button>
-                    )}
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <div className="mb-8 grid grid-cols-1 gap-6 md:grid-cols-2">
-                {/* Confidence Score */}
-                <div className="rounded-xl border border-slate-800 bg-slate-900 p-6">
-                  <div className="mb-4 flex items-center gap-2">
-                    <Gauge className="h-5 w-5 text-sky-400" />
-                    <h2 className="text-lg font-semibold text-slate-100">
-                      Confidence Score
-                    </h2>
-                    <span className="ml-auto rounded bg-sky-500/10 px-2 py-0.5 text-xs font-medium text-sky-400">
-                      {query.toUpperCase()}
-                    </span>
-                  </div>
-
-                  {confidence && (
-                    <>
-                      {/* Circular Gauge */}
-                      <div className="flex flex-col items-center py-4">
-                        <div className="relative h-40 w-40">
-                          <svg
-                            viewBox="0 0 120 120"
-                            className="h-full w-full -rotate-90"
-                          >
-                            {/* Track */}
-                            <circle
-                              cx="60"
-                              cy="60"
-                              r="52"
-                              fill="none"
-                              stroke="currentColor"
-                              strokeWidth="10"
-                              className="text-slate-800"
-                            />
-                            {/* Progress arc */}
-                            <circle
-                              cx="60"
-                              cy="60"
-                              r="52"
-                              fill="none"
-                              stroke="currentColor"
-                              strokeWidth="10"
-                              strokeLinecap="round"
-                              strokeDasharray={`${(confidence.score / 100) * 327} 327`}
-                              className={getScoreColor(confidence.score).text}
-                            />
-                          </svg>
-                          {/* Score number overlay */}
-                          <div className="absolute inset-0 flex flex-col items-center justify-center">
-                            <span
-                              className={`text-4xl font-bold ${getScoreColor(confidence.score).text}`}
-                            >
-                              {confidence.score}
-                            </span>
-                            <span className="text-xs text-slate-400">
-                              / 100
-                            </span>
-                          </div>
-                        </div>
-                        {/* Label */}
-                        <span
-                          className={`mt-3 rounded-full px-4 py-1 text-sm font-semibold ${getScoreColor(confidence.score).text} ${getScoreColor(confidence.score).track}`}
-                        >
-                          {confidence.label}
+                    <div className="space-y-2 border-t border-white/10 pt-4">
+                      <p className="text-xs font-medium uppercase tracking-wider text-slate-500">
+                        Signals
+                      </p>
+                      <div className="flex items-start gap-2 text-sm">
+                        <Coffee className="mt-0.5 h-4 w-4 shrink-0 text-amber-400" />
+                        <span className="text-slate-300">
+                          Insiders are standing pat. No recent conviction signals detected.
                         </span>
                       </div>
+                    </div>
+                  </div>
 
-                      {/* Multi-segment bar */}
-                      <div className="mt-4 mb-5">
-                        <div className="flex h-2.5 w-full overflow-hidden rounded-full bg-slate-800">
-                          <div
-                            className={`${getScoreColor(confidence.score).bg} transition-all duration-500`}
-                            style={{ width: `${confidence.score}%` }}
-                          />
-                        </div>
-                        <div className="mt-1.5 flex justify-between text-[10px] text-slate-500">
-                          <span>0 — Caution</span>
-                          <span>50 — Neutral</span>
-                          <span>100 — High</span>
-                        </div>
-                      </div>
+                  {/* No Activity Feed */}
+                  <div className="rounded-xl border border-white/10 bg-slate-950/60 backdrop-blur-md p-6">
+                    <div className="mb-4 flex items-center gap-2">
+                      <Activity className="h-5 w-5 text-sky-400" />
+                      <h2 className="text-lg font-semibold text-slate-100">
+                        Ticker Activity Feed
+                      </h2>
+                      <span className="ml-auto rounded bg-sky-500/10 px-2 py-0.5 text-xs font-medium text-sky-400">
+                        {query.toUpperCase()}
+                      </span>
+                    </div>
 
-                      {/* Signal list — the "Why" */}
-                      {confidence.signals.length > 0 && (
-                        <div className="space-y-2 border-t border-slate-800 pt-4">
-                          <p className="text-xs font-medium uppercase tracking-wider text-slate-500">
-                            Signals
+                    <div className="flex flex-col items-center py-8 text-center">
+                      <Clock className="mb-3 h-10 w-10 text-slate-700" />
+                      <p className="text-sm text-slate-400">
+                        No insider trades reported in the last 90 days.
+                      </p>
+                      <p className="mt-2 max-w-xs text-xs text-slate-500">
+                        This is common for mid-cap stocks during earnings blackout
+                        periods. Insiders are often restricted from trading before
+                        quarterly reports.
+                      </p>
+
+                      {extendedSearch && (
+                        <div className="mt-4 rounded-lg border border-sky-500/20 bg-sky-500/5 px-4 py-3">
+                          <p className="text-xs text-sky-400">
+                            Form 4 filings exist for the last 6 months but
+                            contained no standard buy/sell transactions to display.
                           </p>
-                          {confidence.signals.map((signal) => (
-                            <div
-                              key={signal.text}
-                              className="flex items-start gap-2 text-sm"
-                            >
-                              <span className="mt-0.5 shrink-0">
-                                {signal.emoji}
-                              </span>
-                              <span className="text-slate-300">
-                                {signal.text}
-                              </span>
-                              <span
-                                className={`ml-auto shrink-0 text-xs font-semibold ${
-                                  signal.points > 0
-                                    ? "text-emerald-400"
-                                    : "text-rose-400"
-                                }`}
-                              >
-                                {signal.points > 0
-                                  ? `+${signal.points}`
-                                  : signal.points}
-                              </span>
-                            </div>
-                          ))}
                         </div>
                       )}
-                    </>
-                  )}
-                </div>
 
-                {/* Ticker Activity Feed */}
-                <div className="rounded-xl border border-slate-800 bg-slate-900 p-6">
-                  <div className="mb-4 flex items-center gap-2">
-                    <Activity className="h-5 w-5 text-sky-400" />
-                    <h2 className="text-lg font-semibold text-slate-100">
-                      Ticker Activity Feed
-                    </h2>
-                    <span className="ml-auto rounded bg-sky-500/10 px-2 py-0.5 text-xs font-medium text-sky-400">
-                      {query.toUpperCase()}
-                    </span>
+                      {!extendedSearch && (
+                        <button
+                          type="button"
+                          onClick={handleCheckOlder}
+                          disabled={loadingExtended}
+                          className="mt-4 flex items-center gap-2 rounded-lg border border-slate-700 bg-slate-800 px-4 py-2 text-sm text-slate-300 transition-colors hover:border-sky-500/50 hover:text-sky-400 disabled:opacity-50"
+                        >
+                          <Clock className="h-4 w-4" />
+                          {loadingExtended
+                            ? "Checking..."
+                            : "Check Older (Last 6 Months)"}
+                        </button>
+                      )}
+                    </div>
                   </div>
-                  <p className="mb-3 text-xs text-slate-400">
-                    Recent personal purchases and company awards for this ticker
-                  </p>
-                  <div className="max-h-[400px] space-y-3 overflow-y-auto">
-                    {activityFeed.length > 0 ? (
-                      activityFeed.map((trade, idx) => {
-                        const rating = getInsiderRating(trade.insiderName);
-                        return (
-                          <div
-                            key={`${trade.insiderName}-${trade.date}-${trade.sharesTraded}-${idx}`}
-                            className="rounded-lg border border-slate-800/50 bg-slate-950/50 p-4"
+                </div>
+              ) : (
+                <div className="mb-8 grid grid-cols-1 gap-6 md:grid-cols-2">
+                  {/* Confidence Score */}
+                  <div className="rounded-xl border border-white/10 bg-slate-950/60 backdrop-blur-md p-6">
+                    <div className="mb-4 flex items-center gap-2">
+                      <Gauge className="h-5 w-5 text-sky-400" />
+                      <h2 className="text-lg font-semibold text-slate-100">
+                        Confidence Score
+                      </h2>
+                      <span className="ml-auto rounded bg-sky-500/10 px-2 py-0.5 text-xs font-medium text-sky-400">
+                        {query.toUpperCase()}
+                      </span>
+                    </div>
+
+                    {confidence && (
+                      <>
+                        {/* Radial Gauge */}
+                        <RadialGauge score={confidence.score} />
+                        <div className="flex justify-center">
+                          <span
+                            className={`rounded-full px-4 py-1 text-sm font-semibold ${getScoreColor(confidence.score).text} ${getScoreColor(confidence.score).track}`}
                           >
-                            <div className="flex items-start justify-between">
-                              <div>
-                                <div className="flex items-center gap-2">
-                                  <p className="font-medium text-slate-100">
-                                    {trade.insiderName}
-                                  </p>
-                                  {/* Star Rating */}
-                                  {rating && (
-                                    <div className="group relative flex items-center gap-1">
-                                      <div className="flex">
-                                        {Array.from({ length: 5 }).map(
-                                          (_, i) => (
-                                            <Star
-                                              key={i}
-                                              className={`h-3.5 w-3.5 ${
-                                                i < rating.stars
-                                                  ? "fill-amber-400 text-amber-400"
-                                                  : "text-slate-700"
-                                              }`}
-                                            />
-                                          ),
-                                        )}
-                                      </div>
-                                      {/* Info tooltip trigger */}
-                                      <div className="relative">
-                                        <Info className="h-3.5 w-3.5 cursor-help text-slate-600 transition-colors hover:text-slate-400" />
-                                        <div className="pointer-events-none absolute bottom-full left-1/2 z-10 mb-2 w-56 -translate-x-1/2 rounded-lg border border-slate-700 bg-slate-800 p-3 text-xs opacity-0 shadow-lg transition-opacity group-hover:pointer-events-auto group-hover:opacity-100">
-                                          <p className="mb-2 font-medium text-slate-200">
-                                            Accuracy Rating ({rating.stars}/5)
-                                          </p>
-                                          <p className="mb-2 text-slate-400">
-                                            Based on how the stock performed
-                                            over 60 days following this
-                                            person&apos;s last{" "}
-                                            {rating.history.length} purchases.
-                                          </p>
-                                          <p className="text-slate-400">
-                                            Avg 60-day return:{" "}
-                                            <span
-                                              className={
-                                                rating.avgReturn >= 0
-                                                  ? "font-semibold text-emerald-400"
-                                                  : "font-semibold text-rose-400"
-                                              }
-                                            >
-                                              {rating.avgReturn > 0 ? "+" : ""}
-                                              {rating.avgReturn}%
-                                            </span>
-                                          </p>
-                                          {/* Arrow */}
-                                          <div className="absolute left-1/2 top-full -translate-x-1/2 border-4 border-transparent border-t-slate-800" />
-                                        </div>
-                                      </div>
-                                    </div>
-                                  )}
-                                </div>
-                                <p className="text-xs text-slate-500">
-                                  {trade.role}
-                                </p>
-                              </div>
-                              <span className="text-xs text-slate-500">
-                                {trade.date}
-                              </span>
-                            </div>
-                            <div className="mt-2 flex flex-wrap items-center gap-2">
-                              <span
-                                className={`rounded px-2 py-0.5 text-xs font-medium ${
-                                  trade.transactionCode === "P"
-                                    ? "bg-emerald-500/10 text-emerald-400"
-                                    : "bg-sky-500/10 text-sky-400"
-                                }`}
-                              >
-                                {trade.transactionLabel}
-                              </span>
-                              <span className="text-xs text-slate-400">
-                                {formatDollars(trade.tradeValue)}
-                              </span>
-                            </div>
-                            <div className="mt-2 flex items-center gap-3 text-xs">
-                              <span className="text-slate-400">
-                                Skin in the Game:{" "}
-                                <span
-                                  className={
-                                    trade.transactionCode === "P"
-                                      ? "font-semibold text-emerald-400"
-                                      : "font-semibold text-sky-400"
-                                  }
-                                >
-                                  {trade.percentageChange}% of holdings
-                                </span>
-                              </span>
-                              <span className="text-slate-400">
-                                Score:{" "}
-                                <span className="font-bold text-slate-100">
-                                  {trade.convictionScore}
-                                </span>
-                              </span>
-                            </div>
+                            {confidence.label}
+                          </span>
+                        </div>
+
+                        {/* Multi-segment bar */}
+                        <div className="mt-4 mb-5">
+                          <div className="flex h-2.5 w-full overflow-hidden rounded-full bg-slate-800">
+                            <div
+                              className={`${getScoreColor(confidence.score).bg} transition-all duration-500`}
+                              style={{ width: `${confidence.score}%` }}
+                            />
                           </div>
-                        );
-                      })
-                    ) : (
-                      <p className="py-8 text-center text-sm text-slate-500">
-                        No personal purchases or awards found
-                      </p>
+                          <div className="mt-1.5 flex justify-between text-[10px] text-slate-500">
+                            <span>0 — Caution</span>
+                            <span>50 — Neutral</span>
+                            <span>100 — High</span>
+                          </div>
+                        </div>
+
+                        {/* Signal list */}
+                        {confidence.signals.length > 0 && (
+                          <div className="space-y-2 border-t border-white/10 pt-4">
+                            <p className="text-xs font-medium uppercase tracking-wider text-slate-500">
+                              Signals
+                            </p>
+                            {confidence.signals.map((signal) => (
+                              <div
+                                key={signal.text}
+                                className="flex items-start gap-2 text-sm"
+                              >
+                                <span className="mt-0.5 shrink-0">
+                                  {signal.emoji}
+                                </span>
+                                <span className="text-slate-300">
+                                  {signal.text}
+                                </span>
+                                <span
+                                  className={`ml-auto shrink-0 text-xs font-semibold ${
+                                    signal.points > 0
+                                      ? "text-emerald-400"
+                                      : "text-rose-400"
+                                  }`}
+                                >
+                                  {signal.points > 0
+                                    ? `+${signal.points}`
+                                    : signal.points}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </>
                     )}
                   </div>
+
+                  {/* Ticker Activity Feed */}
+                  <div className="rounded-xl border border-white/10 bg-slate-950/60 backdrop-blur-md p-6">
+                    <div className="mb-4 flex items-center gap-2">
+                      <Activity className="h-5 w-5 text-sky-400" />
+                      <h2 className="text-lg font-semibold text-slate-100">
+                        Ticker Activity Feed
+                      </h2>
+                      <span className="ml-auto rounded bg-sky-500/10 px-2 py-0.5 text-xs font-medium text-sky-400">
+                        {query.toUpperCase()}
+                      </span>
+                    </div>
+                    <p className="mb-3 text-xs text-slate-400">
+                      Recent personal purchases and company awards for this ticker
+                    </p>
+                    <div className="max-h-[400px] space-y-3 overflow-y-auto">
+                      {activityFeed.length > 0 ? (
+                        activityFeed.map((trade, idx) => {
+                          const rating = getInsiderRating(trade.insiderName);
+                          return (
+                            <div
+                              key={`${trade.insiderName}-${trade.date}-${trade.sharesTraded}-${idx}`}
+                              className="rounded-lg border border-white/5 bg-slate-950/60 backdrop-blur-sm p-4"
+                            >
+                              <div className="flex items-start justify-between">
+                                <div>
+                                  <div className="flex items-center gap-2">
+                                    <p className="font-medium text-slate-100">
+                                      {trade.insiderName}
+                                    </p>
+                                    {rating && (
+                                      <div className="group relative flex items-center gap-1">
+                                        <div className="flex">
+                                          {Array.from({ length: 5 }).map(
+                                            (_, i) => (
+                                              <Star
+                                                key={i}
+                                                className={`h-3.5 w-3.5 ${
+                                                  i < rating.stars
+                                                    ? "fill-amber-400 text-amber-400"
+                                                    : "text-slate-700"
+                                                }`}
+                                              />
+                                            ),
+                                          )}
+                                        </div>
+                                        <div className="relative">
+                                          <Info className="h-3.5 w-3.5 cursor-help text-slate-600 transition-colors hover:text-slate-400" />
+                                          <div className="pointer-events-none absolute bottom-full left-1/2 z-10 mb-2 w-56 -translate-x-1/2 rounded-lg border border-slate-700 bg-slate-800 p-3 text-xs opacity-0 shadow-lg transition-opacity group-hover:pointer-events-auto group-hover:opacity-100">
+                                            <p className="mb-2 font-medium text-slate-200">
+                                              Accuracy Rating ({rating.stars}/5)
+                                            </p>
+                                            <p className="mb-2 text-slate-400">
+                                              Based on how the stock performed
+                                              over 60 days following this
+                                              person&apos;s last{" "}
+                                              {rating.history.length} purchases.
+                                            </p>
+                                            <p className="text-slate-400">
+                                              Avg 60-day return:{" "}
+                                              <span
+                                                className={
+                                                  rating.avgReturn >= 0
+                                                    ? "font-semibold text-emerald-400"
+                                                    : "font-semibold text-rose-400"
+                                                }
+                                              >
+                                                {rating.avgReturn > 0 ? "+" : ""}
+                                                {rating.avgReturn}%
+                                              </span>
+                                            </p>
+                                            <div className="absolute left-1/2 top-full -translate-x-1/2 border-4 border-transparent border-t-slate-800" />
+                                          </div>
+                                        </div>
+                                      </div>
+                                    )}
+                                  </div>
+                                  <p className="text-xs text-slate-500">
+                                    {trade.role}
+                                  </p>
+                                </div>
+                                <span className="text-xs text-slate-500">
+                                  {trade.date}
+                                </span>
+                              </div>
+                              <div className="mt-2 flex flex-wrap items-center gap-2">
+                                <span
+                                  className={`rounded px-2 py-0.5 text-xs font-medium ${
+                                    trade.transactionCode === "P"
+                                      ? "bg-emerald-500/10 text-emerald-400"
+                                      : "bg-sky-500/10 text-sky-400"
+                                  }`}
+                                >
+                                  {trade.transactionLabel}
+                                </span>
+                                <span className="text-xs text-slate-400">
+                                  {formatDollars(trade.tradeValue)}
+                                </span>
+                              </div>
+                              <div className="mt-2 flex items-center gap-3 text-xs">
+                                <span className="text-slate-400">
+                                  Skin in the Game:{" "}
+                                  <span
+                                    className={
+                                      trade.transactionCode === "P"
+                                        ? "font-semibold text-emerald-400"
+                                        : "font-semibold text-sky-400"
+                                    }
+                                  >
+                                    {trade.percentageChange}% of holdings
+                                  </span>
+                                </span>
+                                <span className="text-slate-400">
+                                  Score:{" "}
+                                  <span className="font-bold text-slate-100">
+                                    {trade.convictionScore}
+                                  </span>
+                                </span>
+                              </div>
+                            </div>
+                          );
+                        })
+                      ) : (
+                        <p className="py-8 text-center text-sm text-slate-500">
+                          No personal purchases or awards found
+                        </p>
+                      )}
+                    </div>
+                  </div>
                 </div>
-              </div>
-            )}
-          </>
-        )}
+              )}
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         {/* ── BOTTOM ROW: Market-Wide Global Leaderboards ── */}
-        <div className="mb-2 flex items-center gap-2">
-          <Globe className="h-4 w-4 text-slate-500" />
-          <h3 className="text-sm font-medium uppercase tracking-wider text-slate-500">
-            Market-Wide Leaderboards
-          </h3>
-        </div>
-        <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-          {/* Global Top Insider Buys */}
-          <div className="rounded-xl border border-slate-700/50 bg-slate-900/60 p-6">
-            <div className="mb-4 flex items-center gap-2">
-              <TrendingUp className="h-5 w-5 text-emerald-400" />
-              <h2 className="text-lg font-semibold text-slate-100">
-                Top Insider Buys
-              </h2>
-              <span className="ml-auto rounded bg-slate-800 px-2 py-0.5 text-xs text-slate-400">
-                All Tickers
-              </span>
-            </div>
-            <p className="mb-3 text-xs text-slate-400">
-              Biggest personal cash purchases across the entire market
-            </p>
-            <div className="max-h-[400px] overflow-y-auto">
-              <table className="w-full text-left text-sm">
-                <thead>
-                  <tr className="border-b border-slate-800 text-xs text-slate-400">
-                    <th className="pb-2 font-medium">#</th>
-                    <th className="pb-2 font-medium">Ticker</th>
-                    <th className="pb-2 font-medium">Insider</th>
-                    <th className="pb-2 text-right font-medium">Total $</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {globalBuys.map((trade, i) => (
-                    <tr
-                      key={`${trade.ticker}-${trade.insiderName}-${trade.sharesTraded}-${i}`}
-                      className="border-b border-slate-800/50 last:border-0"
-                    >
-                      <td className="py-3 text-slate-500">{i + 1}</td>
-                      <td className="py-3">
-                        <span className="rounded bg-emerald-500/10 px-2 py-0.5 text-xs font-medium text-emerald-400">
-                          {trade.ticker}
-                        </span>
-                      </td>
-                      <td className="py-3 text-slate-300">
-                        {trade.insiderName}
-                      </td>
-                      <td className="py-3 text-right font-medium text-emerald-400">
-                        {formatDollars(trade.tradeValue)}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+        <MotionSection delay={0.15}>
+          <div className="mb-2 flex items-center gap-2">
+            <Globe className="h-4 w-4 text-slate-500" />
+            <h3 className="text-sm font-medium uppercase tracking-wider text-slate-500">
+              Market-Wide Leaderboards
+            </h3>
           </div>
+          <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+            {/* Global Top Insider Buys */}
+            <div className="rounded-xl border border-white/10 bg-slate-950/60 backdrop-blur-md p-6">
+              <div className="mb-4 flex items-center gap-2">
+                <TrendingUp className="h-5 w-5 text-emerald-400" />
+                <h2 className="text-lg font-semibold text-slate-100">
+                  Top Insider Buys
+                </h2>
+                <span className="ml-auto rounded bg-slate-800 px-2 py-0.5 text-xs text-slate-400">
+                  All Tickers
+                </span>
+              </div>
+              <p className="mb-3 text-xs text-slate-400">
+                Biggest personal cash purchases across the entire market
+              </p>
+              <div className="max-h-[400px] overflow-y-auto">
+                <table className="w-full text-left text-sm">
+                  <thead>
+                    <tr className="border-b border-white/10 text-xs text-slate-400">
+                      <th className="pb-2 font-medium">#</th>
+                      <th className="pb-2 font-medium">Ticker</th>
+                      <th className="pb-2 font-medium">Insider</th>
+                      <th className="pb-2 text-right font-medium">Total $</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {globalBuys.map((trade, i) => (
+                      <tr
+                        key={`${trade.ticker}-${trade.insiderName}-${trade.sharesTraded}-${i}`}
+                        className="border-b border-white/5 last:border-0"
+                      >
+                        <td className="py-3 text-slate-500">{i + 1}</td>
+                        <td className="py-3">
+                          <span className="rounded bg-emerald-500/10 px-2 py-0.5 text-xs font-medium text-emerald-400">
+                            {trade.ticker}
+                          </span>
+                        </td>
+                        <td className="py-3 text-slate-300">
+                          {trade.insiderName}
+                        </td>
+                        <td className="py-3 text-right font-medium text-emerald-400">
+                          {formatDollars(trade.tradeValue)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
 
-          {/* Global Top Insider Sells */}
-          <div className="rounded-xl border border-slate-700/50 bg-slate-900/60 p-6">
-            <div className="mb-4 flex items-center gap-2">
-              <TrendingDown className="h-5 w-5 text-rose-400" />
-              <h2 className="text-lg font-semibold text-slate-100">
-                Top Insider Sells
-              </h2>
-              <span className="ml-auto rounded bg-slate-800 px-2 py-0.5 text-xs text-slate-400">
-                All Tickers
-              </span>
-            </div>
-            <p className="mb-3 text-xs text-slate-400">
-              Biggest insider sales across the entire market
-            </p>
-            <div className="max-h-[400px] overflow-y-auto">
-              <table className="w-full text-left text-sm">
-                <thead>
-                  <tr className="border-b border-slate-800 text-xs text-slate-400">
-                    <th className="pb-2 font-medium">#</th>
-                    <th className="pb-2 font-medium">Ticker</th>
-                    <th className="pb-2 font-medium">Insider</th>
-                    <th className="pb-2 text-right font-medium">Total $</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {globalSells.map((trade, i) => (
-                    <tr
-                      key={`${trade.ticker}-${trade.insiderName}-${trade.sharesTraded}-${i}`}
-                      className="border-b border-slate-800/50 last:border-0"
-                    >
-                      <td className="py-3 text-slate-500">{i + 1}</td>
-                      <td className="py-3">
-                        <span className="rounded bg-rose-500/10 px-2 py-0.5 text-xs font-medium text-rose-400">
-                          {trade.ticker}
-                        </span>
-                      </td>
-                      <td className="py-3 text-slate-300">
-                        {trade.insiderName}
-                      </td>
-                      <td className="py-3 text-right font-medium text-rose-400">
-                        {formatDollars(trade.tradeValue)}
-                      </td>
+            {/* Global Top Insider Sells */}
+            <div className="rounded-xl border border-white/10 bg-slate-950/60 backdrop-blur-md p-6">
+              <div className="mb-4 flex items-center gap-2">
+                <TrendingDown className="h-5 w-5 text-rose-400" />
+                <h2 className="text-lg font-semibold text-slate-100">
+                  Top Insider Sells
+                </h2>
+                <span className="ml-auto rounded bg-slate-800 px-2 py-0.5 text-xs text-slate-400">
+                  All Tickers
+                </span>
+              </div>
+              <p className="mb-3 text-xs text-slate-400">
+                Biggest insider sales across the entire market
+              </p>
+              <div className="max-h-[400px] overflow-y-auto">
+                <table className="w-full text-left text-sm">
+                  <thead>
+                    <tr className="border-b border-white/10 text-xs text-slate-400">
+                      <th className="pb-2 font-medium">#</th>
+                      <th className="pb-2 font-medium">Ticker</th>
+                      <th className="pb-2 font-medium">Insider</th>
+                      <th className="pb-2 text-right font-medium">Total $</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {globalSells.map((trade, i) => (
+                      <tr
+                        key={`${trade.ticker}-${trade.insiderName}-${trade.sharesTraded}-${i}`}
+                        className="border-b border-white/5 last:border-0"
+                      >
+                        <td className="py-3 text-slate-500">{i + 1}</td>
+                        <td className="py-3">
+                          <span className="rounded bg-rose-500/10 px-2 py-0.5 text-xs font-medium text-rose-400">
+                            {trade.ticker}
+                          </span>
+                        </td>
+                        <td className="py-3 text-slate-300">
+                          {trade.insiderName}
+                        </td>
+                        <td className="py-3 text-right font-medium text-rose-400">
+                          {formatDollars(trade.tradeValue)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
           </div>
-        </div>
+        </MotionSection>
 
         {/* ── SECTOR HEAT MAP ── */}
-        <SectorHeatMap />
+        <MotionSection delay={0.25}>
+          <SectorHeatMap />
+        </MotionSection>
 
         {/* ── EDUCATION STATION ── */}
-        <EducationStation />
+        <MotionSection delay={0.35}>
+          <EducationStation />
+        </MotionSection>
       </main>
 
       {/* Footer */}
