@@ -11,6 +11,8 @@ import {
   Globe,
   Star,
   Info,
+  Clock,
+  Coffee,
 } from "lucide-react";
 import {
   getProcessedTrades,
@@ -34,6 +36,8 @@ export default function Home() {
   const [tickerTrades, setTickerTrades] = useState<ProcessedTrade[]>([]);
   const [confidence, setConfidence] = useState<ConfidenceResult | null>(null);
   const [searched, setSearched] = useState(false);
+  const [extendedSearch, setExtendedSearch] = useState(false);
+  const [loadingExtended, setLoadingExtended] = useState(false);
 
   const activityFeed = tickerTrades.filter(
     (t) => t.transactionCode === "P" || t.transactionCode === "A",
@@ -49,6 +53,33 @@ export default function Home() {
     setTickerTrades(getProcessedTrades(query));
     setConfidence(calculateConfidenceScore(query));
     setSearched(true);
+    setExtendedSearch(false);
+  }
+
+  async function handleCheckOlder() {
+    if (!query.trim() || loadingExtended) return;
+    setLoadingExtended(true);
+    try {
+      const res = await fetch(
+        `/api/insider-trades?ticker=${encodeURIComponent(query)}&extended=true`,
+      );
+      if (res.ok) {
+        const data = await res.json();
+        if (data.trades && data.trades.length > 0) {
+          // Real parsed trades came back — load them into the UI
+          setTickerTrades(data.trades);
+          setConfidence(data.confidence);
+          setExtendedSearch(true);
+        } else {
+          // Filings exist but no parseable transactions
+          setExtendedSearch(true);
+        }
+      }
+    } catch {
+      // silently fail — the button just stays
+    } finally {
+      setLoadingExtended(false);
+    }
   }
 
   function getScoreColor(score: number) {
@@ -96,16 +127,122 @@ export default function Home() {
         {searched && (
           <>
             {tickerTrades.length === 0 ? (
-              <div className="mb-8 rounded-xl border border-slate-800 bg-slate-900 p-6 text-center">
-                <p className="text-slate-400">
-                  No insider trades found for{" "}
-                  <span className="font-semibold text-slate-100">
-                    {query.toUpperCase()}
-                  </span>
-                </p>
-                <p className="mt-1 text-xs text-slate-500">
-                  Try: {availableTickers.join(", ")}
-                </p>
+              <div className="mb-8 grid grid-cols-1 gap-6 md:grid-cols-2">
+                {/* Neutral Confidence Score */}
+                <div className="rounded-xl border border-slate-800 bg-slate-900 p-6">
+                  <div className="mb-4 flex items-center gap-2">
+                    <Gauge className="h-5 w-5 text-sky-400" />
+                    <h2 className="text-lg font-semibold text-slate-100">
+                      Confidence Score
+                    </h2>
+                    <span className="ml-auto rounded bg-sky-500/10 px-2 py-0.5 text-xs font-medium text-sky-400">
+                      {query.toUpperCase()}
+                    </span>
+                  </div>
+
+                  {/* Neutral gauge at 50 */}
+                  <div className="flex flex-col items-center py-4">
+                    <div className="relative h-40 w-40">
+                      <svg
+                        viewBox="0 0 120 120"
+                        className="h-full w-full -rotate-90"
+                      >
+                        <circle
+                          cx="60" cy="60" r="52"
+                          fill="none" stroke="currentColor" strokeWidth="10"
+                          className="text-slate-800"
+                        />
+                        <circle
+                          cx="60" cy="60" r="52"
+                          fill="none" stroke="currentColor" strokeWidth="10"
+                          strokeLinecap="round"
+                          strokeDasharray={`${(50 / 100) * 327} 327`}
+                          className="text-amber-400"
+                        />
+                      </svg>
+                      <div className="absolute inset-0 flex flex-col items-center justify-center">
+                        <span className="text-4xl font-bold text-amber-400">50</span>
+                        <span className="text-xs text-slate-400">/ 100</span>
+                      </div>
+                    </div>
+                    <span className="mt-3 rounded-full bg-amber-500/20 px-4 py-1 text-sm font-semibold text-amber-400">
+                      Neutral
+                    </span>
+                  </div>
+
+                  <div className="mt-4 mb-5">
+                    <div className="flex h-2.5 w-full overflow-hidden rounded-full bg-slate-800">
+                      <div className="bg-amber-400 transition-all duration-500" style={{ width: "50%" }} />
+                    </div>
+                    <div className="mt-1.5 flex justify-between text-[10px] text-slate-500">
+                      <span>0 — Caution</span>
+                      <span>50 — Neutral</span>
+                      <span>100 — High</span>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2 border-t border-slate-800 pt-4">
+                    <p className="text-xs font-medium uppercase tracking-wider text-slate-500">
+                      Signals
+                    </p>
+                    <div className="flex items-start gap-2 text-sm">
+                      <Coffee className="mt-0.5 h-4 w-4 shrink-0 text-amber-400" />
+                      <span className="text-slate-300">
+                        Insiders are standing pat. No recent conviction signals detected.
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* No Activity Feed */}
+                <div className="rounded-xl border border-slate-800 bg-slate-900 p-6">
+                  <div className="mb-4 flex items-center gap-2">
+                    <Activity className="h-5 w-5 text-sky-400" />
+                    <h2 className="text-lg font-semibold text-slate-100">
+                      Ticker Activity Feed
+                    </h2>
+                    <span className="ml-auto rounded bg-sky-500/10 px-2 py-0.5 text-xs font-medium text-sky-400">
+                      {query.toUpperCase()}
+                    </span>
+                  </div>
+
+                  <div className="flex flex-col items-center py-8 text-center">
+                    <Clock className="mb-3 h-10 w-10 text-slate-700" />
+                    <p className="text-sm text-slate-400">
+                      No insider trades reported in the last 90 days.
+                    </p>
+                    <p className="mt-2 max-w-xs text-xs text-slate-500">
+                      This is common for mid-cap stocks during earnings blackout
+                      periods. Insiders are often restricted from trading before
+                      quarterly reports.
+                    </p>
+
+                    {/* Extended search found filings but no parseable trades */}
+                    {extendedSearch && (
+                      <div className="mt-4 rounded-lg border border-sky-500/20 bg-sky-500/5 px-4 py-3">
+                        <p className="text-xs text-sky-400">
+                          Form 4 filings exist for the last 6 months but
+                          contained no standard buy/sell transactions to display.
+                        </p>
+                      </div>
+                    )}
+
+                    {/* Check Older button */}
+                    {!extendedSearch && (
+                      <button
+                        type="button"
+                        onClick={handleCheckOlder}
+                        disabled={loadingExtended}
+                        className="mt-4 flex items-center gap-2 rounded-lg border border-slate-700 bg-slate-800 px-4 py-2 text-sm text-slate-300 transition-colors hover:border-sky-500/50 hover:text-sky-400 disabled:opacity-50"
+                      >
+                        <Clock className="h-4 w-4" />
+                        {loadingExtended
+                          ? "Checking..."
+                          : "Check Older (Last 6 Months)"}
+                      </button>
+                    )}
+                  </div>
+                </div>
               </div>
             ) : (
               <div className="mb-8 grid grid-cols-1 gap-6 md:grid-cols-2">
