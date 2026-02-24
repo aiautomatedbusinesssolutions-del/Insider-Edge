@@ -21,6 +21,7 @@ import {
   type ProcessedTrade,
   type ConfidenceResult,
 } from "@/lib/mock-sec-service";
+import SectorHeatMap from "@/components/SectorHeatMap";
 
 function formatDollars(value: number): string {
   if (value >= 1_000_000) return `$${(value / 1_000_000).toFixed(1)}M`;
@@ -465,6 +466,9 @@ export default function Home() {
             </div>
           </div>
         </div>
+
+        {/* ── SECTOR HEAT MAP ── */}
+        <SectorHeatMap />
       </main>
 
       {/* Footer */}

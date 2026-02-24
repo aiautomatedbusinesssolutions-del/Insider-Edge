@@ -4,8 +4,17 @@
 
 export type TransactionCode = "P" | "S" | "A";
 
+export type Sector =
+  | "Tech"
+  | "Auto & Energy"
+  | "E-Commerce"
+  | "Semiconductors"
+  | "Healthcare"
+  | "Finance";
+
 export interface InsiderTrade {
   ticker: string;
+  sector: Sector;
   insiderName: string;
   role: string;
   transactionCode: TransactionCode;
@@ -31,10 +40,10 @@ export interface ProcessedTrade extends InsiderTrade {
 // ---------------------------------------------------------------------------
 
 const MOCK_TRADES: InsiderTrade[] = [
-  // ---- TSLA ----
-  // High-conviction buy: insider increases stake by ~50%
+  // ---- TSLA (Auto & Energy) ----
   {
     ticker: "TSLA",
+    sector: "Auto & Energy",
     insiderName: "Elon Musk",
     role: "CEO",
     transactionCode: "P",
@@ -43,9 +52,9 @@ const MOCK_TRADES: InsiderTrade[] = [
     totalHoldingsBefore: 1_000_000,
     date: "2026-02-22",
   },
-  // Company award
   {
     ticker: "TSLA",
+    sector: "Auto & Energy",
     insiderName: "Robyn Denholm",
     role: "Chair of the Board",
     transactionCode: "A",
@@ -54,9 +63,9 @@ const MOCK_TRADES: InsiderTrade[] = [
     totalHoldingsBefore: 200_000,
     date: "2026-02-21",
   },
-  // Insider sell
   {
     ticker: "TSLA",
+    sector: "Auto & Energy",
     insiderName: "Zachary Kirkhorn",
     role: "CFO",
     transactionCode: "S",
@@ -65,9 +74,9 @@ const MOCK_TRADES: InsiderTrade[] = [
     totalHoldingsBefore: 95_000,
     date: "2026-02-20",
   },
-  // Moderate buy
   {
     ticker: "TSLA",
+    sector: "Auto & Energy",
     insiderName: "Andrew Baglino",
     role: "SVP, Powertrain & Energy",
     transactionCode: "P",
@@ -76,9 +85,9 @@ const MOCK_TRADES: InsiderTrade[] = [
     totalHoldingsBefore: 120_000,
     date: "2026-02-19",
   },
-  // Small sell
   {
     ticker: "TSLA",
+    sector: "Auto & Energy",
     insiderName: "Vaibhav Taneja",
     role: "CFO",
     transactionCode: "S",
@@ -88,9 +97,10 @@ const MOCK_TRADES: InsiderTrade[] = [
     date: "2026-02-18",
   },
 
-  // ---- AAPL ----
+  // ---- AAPL (Tech) ----
   {
     ticker: "AAPL",
+    sector: "Tech",
     insiderName: "Tim Cook",
     role: "CEO",
     transactionCode: "S",
@@ -101,6 +111,7 @@ const MOCK_TRADES: InsiderTrade[] = [
   },
   {
     ticker: "AAPL",
+    sector: "Tech",
     insiderName: "Luca Maestri",
     role: "SVP & CFO",
     transactionCode: "P",
@@ -111,6 +122,7 @@ const MOCK_TRADES: InsiderTrade[] = [
   },
   {
     ticker: "AAPL",
+    sector: "Tech",
     insiderName: "Jeff Williams",
     role: "COO",
     transactionCode: "A",
@@ -121,6 +133,7 @@ const MOCK_TRADES: InsiderTrade[] = [
   },
   {
     ticker: "AAPL",
+    sector: "Tech",
     insiderName: "Deirdre O'Brien",
     role: "SVP, Retail",
     transactionCode: "P",
@@ -130,9 +143,10 @@ const MOCK_TRADES: InsiderTrade[] = [
     date: "2026-02-19",
   },
 
-  // ---- AMZN ----
+  // ---- AMZN (E-Commerce) ----
   {
     ticker: "AMZN",
+    sector: "E-Commerce",
     insiderName: "Andy Jassy",
     role: "CEO",
     transactionCode: "P",
@@ -143,6 +157,7 @@ const MOCK_TRADES: InsiderTrade[] = [
   },
   {
     ticker: "AMZN",
+    sector: "E-Commerce",
     insiderName: "Brian Olsavsky",
     role: "SVP & CFO",
     transactionCode: "S",
@@ -153,6 +168,7 @@ const MOCK_TRADES: InsiderTrade[] = [
   },
   {
     ticker: "AMZN",
+    sector: "E-Commerce",
     insiderName: "Adam Selipsky",
     role: "CEO, AWS",
     transactionCode: "P",
@@ -162,9 +178,10 @@ const MOCK_TRADES: InsiderTrade[] = [
     date: "2026-02-20",
   },
 
-  // ---- NVDA ----
+  // ---- NVDA (Semiconductors) ----
   {
     ticker: "NVDA",
+    sector: "Semiconductors",
     insiderName: "Jensen Huang",
     role: "CEO",
     transactionCode: "S",
@@ -175,6 +192,7 @@ const MOCK_TRADES: InsiderTrade[] = [
   },
   {
     ticker: "NVDA",
+    sector: "Semiconductors",
     insiderName: "Colette Kress",
     role: "EVP & CFO",
     transactionCode: "P",
@@ -184,9 +202,10 @@ const MOCK_TRADES: InsiderTrade[] = [
     date: "2026-02-21",
   },
 
-  // ---- MSFT ----
+  // ---- MSFT (Tech) ----
   {
     ticker: "MSFT",
+    sector: "Tech",
     insiderName: "Satya Nadella",
     role: "CEO",
     transactionCode: "S",
@@ -197,6 +216,7 @@ const MOCK_TRADES: InsiderTrade[] = [
   },
   {
     ticker: "MSFT",
+    sector: "Tech",
     insiderName: "Amy Hood",
     role: "EVP & CFO",
     transactionCode: "P",
@@ -522,4 +542,85 @@ export function getGlobalTopTrades(
     })
     .sort((a, b) => b.tradeValue - a.tradeValue)
     .slice(0, limit);
+}
+
+// ---------------------------------------------------------------------------
+// Sector Heat Map — sentiment by sector
+// ---------------------------------------------------------------------------
+
+export interface SectorSentiment {
+  sector: Sector;
+  totalBuyValue: number;
+  totalSellValue: number;
+  netFlow: number;
+  buyCount: number;
+  sellCount: number;
+  /** 1-5 glow intensity based on net flow volume */
+  glowLevel: number;
+  /** "buying" | "selling" | "neutral" */
+  direction: "buying" | "selling" | "neutral";
+}
+
+export function getSectorSentiment(): SectorSentiment[] {
+  const ALL_SECTORS: Sector[] = [
+    "Tech",
+    "Auto & Energy",
+    "E-Commerce",
+    "Semiconductors",
+    "Healthcare",
+    "Finance",
+  ];
+
+  const sectorMap = new Map<
+    Sector,
+    { buyValue: number; sellValue: number; buyCount: number; sellCount: number }
+  >();
+
+  // Initialise every sector so they all appear
+  for (const s of ALL_SECTORS) {
+    sectorMap.set(s, { buyValue: 0, sellValue: 0, buyCount: 0, sellCount: 0 });
+  }
+
+  for (const trade of MOCK_TRADES) {
+    const entry = sectorMap.get(trade.sector)!;
+    const value = trade.sharesTraded * trade.sharePrice;
+
+    if (trade.transactionCode === "P") {
+      entry.buyValue += value;
+      entry.buyCount++;
+    } else if (trade.transactionCode === "S") {
+      entry.sellValue += value;
+      entry.sellCount++;
+    }
+  }
+
+  // Find the max absolute net flow across sectors for relative glow scaling
+  const entries = Array.from(sectorMap.entries()).map(([sector, d]) => ({
+    sector,
+    ...d,
+    netFlow: d.buyValue - d.sellValue,
+  }));
+
+  const maxAbsFlow = Math.max(...entries.map((e) => Math.abs(e.netFlow)), 1);
+
+  return entries.map((e) => {
+    const ratio = Math.abs(e.netFlow) / maxAbsFlow;
+    const glowLevel = e.netFlow === 0 ? 0 : Math.max(1, Math.ceil(ratio * 5));
+
+    let direction: SectorSentiment["direction"];
+    if (e.netFlow > 0) direction = "buying";
+    else if (e.netFlow < 0) direction = "selling";
+    else direction = "neutral";
+
+    return {
+      sector: e.sector,
+      totalBuyValue: e.buyValue,
+      totalSellValue: e.sellValue,
+      netFlow: e.netFlow,
+      buyCount: e.buyCount,
+      sellCount: e.sellCount,
+      glowLevel,
+      direction,
+    };
+  });
 }
