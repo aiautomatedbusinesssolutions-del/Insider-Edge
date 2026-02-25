@@ -9,6 +9,9 @@ import {
 import {
   getProcessedTrades,
   calculateConfidenceScore,
+  calculateConfidenceFromTrades,
+  scoreConviction,
+  TRANSACTION_LABELS,
   type ProcessedTrade,
   type ConfidenceResult,
 } from "@/lib/mock-sec-service";
@@ -20,18 +23,16 @@ import {
 // Extended (6 months): Fetches & parses actual Form 4 XML from SEC EDGAR
 // ---------------------------------------------------------------------------
 
-/** Map SEC transaction codes to our beginner-friendly labels */
-function getTransactionLabel(code: string): string {
-  switch (code.toUpperCase()) {
-    case "P": return "Used Personal Cash";
-    case "S": return "Insider Selling";
-    case "A": return "Company Award";
-    case "M": return "Option Exercise";
-    case "G": return "Gift";
-    case "F": return "Tax Withholding";
-    default:  return `Transaction (${code})`;
-  }
-}
+// ---------------------------------------------------------------------------
+// In-memory response cache (5-minute TTL)
+// ---------------------------------------------------------------------------
+
+const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
+const responseCache = new Map<
+  string,
+  { data: Record<string, unknown>; timestamp: number }
+>();
 
 /** Convert parsed Form 4 data into our app's ProcessedTrade format */
 function convertToProcessedTrades(
@@ -48,21 +49,7 @@ function convertToProcessedTrades(
     const percentageChange =
       holdingsBefore > 0 ? (t.sharesTraded / holdingsBefore) * 100 : 0;
 
-    let convictionScore: number;
     const code = t.transactionCode.toUpperCase();
-    if (code === "P") {
-      if (percentageChange >= 50) convictionScore = 98;
-      else if (percentageChange >= 25) convictionScore = 92;
-      else if (percentageChange >= 10) convictionScore = 85;
-      else if (percentageChange >= 5) convictionScore = 72;
-      else convictionScore = Math.max(40, Math.round(percentageChange * 8));
-    } else if (code === "S") {
-      if (percentageChange >= 50) convictionScore = 70;
-      else if (percentageChange >= 20) convictionScore = 55;
-      else convictionScore = Math.max(20, Math.round(percentageChange * 2.5));
-    } else {
-      convictionScore = Math.min(30, Math.round(10 + percentageChange * 0.5));
-    }
 
     return {
       ticker: t.ticker,
@@ -76,78 +63,12 @@ function convertToProcessedTrades(
       sharePrice: t.sharePrice,
       totalHoldingsBefore: holdingsBefore,
       date: t.filingDate,
-      transactionLabel: getTransactionLabel(t.transactionCode),
+      transactionLabel: TRANSACTION_LABELS[code] ?? `Transaction (${code})`,
       tradeValue,
       percentageChange: Math.round(percentageChange * 100) / 100,
-      convictionScore,
+      convictionScore: scoreConviction(code, percentageChange),
     };
   });
-}
-
-/** Build a confidence score from live parsed trades */
-function buildLiveConfidence(trades: ProcessedTrade[]): ConfidenceResult {
-  let score = 50;
-  const signals: ConfidenceResult["signals"] = [];
-
-  const buys = trades.filter((t) => t.transactionCode === "P");
-  const uniqueBuyers = new Set(buys.map((t) => t.insiderName));
-
-  if (uniqueBuyers.size >= 3) {
-    score += 30;
-    signals.push({
-      emoji: "\uD83D\uDD25",
-      text: `Cluster Buy (${uniqueBuyers.size} Insiders)`,
-      points: 30,
-    });
-  }
-
-  const execBuyers = buys.filter(
-    (t) =>
-      t.role.toUpperCase().includes("CEO") ||
-      t.role.toUpperCase().includes("CFO") ||
-      t.role.toUpperCase().includes("CHIEF"),
-  );
-  if (execBuyers.length > 0) {
-    score += 20;
-    signals.push({
-      emoji: "\u2705",
-      text: `${execBuyers[0].insiderName} (${execBuyers[0].role}) Buying Detected`,
-      points: 20,
-    });
-  }
-
-  const bigBuys = buys.filter((t) => t.percentageChange > 10);
-  if (bigBuys.length > 0) {
-    score += 15;
-    const biggest = bigBuys.reduce((a, b) =>
-      a.percentageChange > b.percentageChange ? a : b,
-    );
-    signals.push({
-      emoji: "\uD83D\uDCAA",
-      text: `${biggest.insiderName} increased stake by ${Math.round(biggest.percentageChange)}%`,
-      points: 15,
-    });
-  }
-
-  const sells = trades.filter((t) => t.transactionCode === "S");
-  if (sells.length > 0) {
-    const penalty = sells.length * 20;
-    score -= penalty;
-    signals.push({
-      emoji: "\u26A0\uFE0F",
-      text: `${sells.length} Insider Sale${sells.length > 1 ? "s" : ""} Detected`,
-      points: -penalty,
-    });
-  }
-
-  score = Math.max(0, Math.min(100, score));
-
-  let label: ConfidenceResult["label"];
-  if (score <= 30) label = "Caution";
-  else if (score <= 70) label = "Neutral";
-  else label = "High Confidence";
-
-  return { score, label, signals };
 }
 
 export async function GET(request: NextRequest) {
@@ -162,6 +83,14 @@ export async function GET(request: NextRequest) {
   }
 
   const normalised = ticker.trim().toUpperCase();
+  const cacheKey = `${normalised}:${extended}`;
+
+  // Check cache
+  const cached = responseCache.get(cacheKey);
+  if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
+    return NextResponse.json(cached.data);
+  }
+
   const lookbackDays = extended ? 180 : 30;
 
   // Run Polygon calls in parallel — each is independent
@@ -204,7 +133,7 @@ export async function GET(request: NextRequest) {
     trades = convertToProcessedTrades(parsedTrades, company.sector)
       .sort((a, b) => b.date.localeCompare(a.date));
     confidence = trades.length > 0
-      ? buildLiveConfidence(trades)
+      ? calculateConfidenceFromTrades(trades)
       : { score: 50, label: "Neutral", signals: [] };
     filingCount = parsedTrades.length;
   } else {
@@ -218,7 +147,7 @@ export async function GET(request: NextRequest) {
     confidence = calculateConfidenceScore(normalised);
   }
 
-  return NextResponse.json({
+  const responseData = {
     ticker: normalised,
     lookbackDays,
     company: {
@@ -238,5 +167,10 @@ export async function GET(request: NextRequest) {
         ? "polygon.io + sec-edgar-parsed"
         : "polygon.io + mock-sec-service",
     },
-  });
+  };
+
+  // Store in cache
+  responseCache.set(cacheKey, { data: responseData, timestamp: Date.now() });
+
+  return NextResponse.json(responseData);
 }

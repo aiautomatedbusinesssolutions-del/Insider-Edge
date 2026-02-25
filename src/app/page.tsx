@@ -1,6 +1,5 @@
 "use client";
 
-import { useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import {
   Search,
@@ -14,89 +13,41 @@ import {
   Info,
   Clock,
   Coffee,
+  AlertTriangle,
 } from "lucide-react";
 import {
-  getProcessedTrades,
   getGlobalTopTrades,
   getAvailableTickers,
-  calculateConfidenceScore,
   getInsiderRating,
-  type ProcessedTrade,
-  type ConfidenceResult,
 } from "@/lib/mock-sec-service";
+import { formatDollars, getScoreColor } from "@/lib/format";
+import { useTickerSearch } from "@/hooks/useTickerSearch";
 import SectorHeatMap from "@/components/SectorHeatMap";
 import EducationStation from "@/components/EducationStation";
+import ErrorBoundary from "@/components/ui/ErrorBoundary";
 import RadialGauge from "@/components/charts/RadialGauge";
 import { SkeletonCard, SkeletonFeed } from "@/components/ui/Skeleton";
 import MotionSection from "@/components/ui/MotionSection";
 
-function formatDollars(value: number): string {
-  if (value >= 1_000_000) return `$${(value / 1_000_000).toFixed(1)}M`;
-  if (value >= 1_000) return `$${(value / 1_000).toFixed(0)}K`;
-  return `$${value.toFixed(0)}`;
-}
-
 export default function Home() {
-  const [query, setQuery] = useState("");
-  const [tickerTrades, setTickerTrades] = useState<ProcessedTrade[]>([]);
-  const [confidence, setConfidence] = useState<ConfidenceResult | null>(null);
-  const [searched, setSearched] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [extendedSearch, setExtendedSearch] = useState(false);
-  const [loadingExtended, setLoadingExtended] = useState(false);
-
-  const activityFeed = tickerTrades.filter(
-    (t) => t.transactionCode === "P" || t.transactionCode === "A",
-  );
+  const {
+    query,
+    setQuery,
+    tickerTrades,
+    confidence,
+    searched,
+    loading,
+    extendedSearch,
+    loadingExtended,
+    errorMessage,
+    activityFeed,
+    handleSearch,
+    handleCheckOlder,
+  } = useTickerSearch();
 
   const globalBuys = getGlobalTopTrades("P", 10);
   const globalSells = getGlobalTopTrades("S", 10);
   const availableTickers = getAvailableTickers();
-
-  function handleSearch(e: React.FormEvent) {
-    e.preventDefault();
-    if (!query.trim()) return;
-    setLoading(true);
-    setSearched(true);
-    setExtendedSearch(false);
-
-    // Ensure skeleton is visible for at least 400ms
-    setTimeout(() => {
-      setTickerTrades(getProcessedTrades(query));
-      setConfidence(calculateConfidenceScore(query));
-      setLoading(false);
-    }, 400);
-  }
-
-  async function handleCheckOlder() {
-    if (!query.trim() || loadingExtended) return;
-    setLoadingExtended(true);
-    try {
-      const res = await fetch(
-        `/api/insider-trades?ticker=${encodeURIComponent(query)}&extended=true`,
-      );
-      if (res.ok) {
-        const data = await res.json();
-        if (data.trades && data.trades.length > 0) {
-          setTickerTrades(data.trades);
-          setConfidence(data.confidence);
-          setExtendedSearch(true);
-        } else {
-          setExtendedSearch(true);
-        }
-      }
-    } catch {
-      // silently fail — the button just stays
-    } finally {
-      setLoadingExtended(false);
-    }
-  }
-
-  function getScoreColor(score: number) {
-    if (score <= 30) return { text: "text-rose-400", bg: "bg-rose-400", track: "bg-rose-500/20" };
-    if (score <= 70) return { text: "text-amber-400", bg: "bg-amber-400", track: "bg-amber-500/20" };
-    return { text: "text-emerald-400", bg: "bg-emerald-400", track: "bg-emerald-500/20" };
-  }
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100">
@@ -247,6 +198,13 @@ export default function Home() {
                             ? "Checking..."
                             : "Check Older (Last 6 Months)"}
                         </button>
+                      )}
+
+                      {errorMessage && (
+                        <div className="mt-3 flex items-center gap-2 rounded-lg border border-rose-500/20 bg-rose-500/5 px-4 py-2.5">
+                          <AlertTriangle className="h-4 w-4 shrink-0 text-rose-400" />
+                          <p className="text-xs text-rose-400">{errorMessage}</p>
+                        </div>
                       )}
                     </div>
                   </div>
@@ -573,12 +531,16 @@ export default function Home() {
 
         {/* ── SECTOR HEAT MAP ── */}
         <MotionSection delay={0.25}>
-          <SectorHeatMap />
+          <ErrorBoundary fallbackTitle="Sector heat map failed to load">
+            <SectorHeatMap />
+          </ErrorBoundary>
         </MotionSection>
 
         {/* ── EDUCATION STATION ── */}
         <MotionSection delay={0.35}>
-          <EducationStation />
+          <ErrorBoundary fallbackTitle="Education station failed to load">
+            <EducationStation />
+          </ErrorBoundary>
         </MotionSection>
       </main>
 

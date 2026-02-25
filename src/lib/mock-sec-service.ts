@@ -331,10 +331,13 @@ export function getInsiderRating(insiderName: string): InsiderRating | null {
 // Transaction Labels
 // ---------------------------------------------------------------------------
 
-const TRANSACTION_LABELS: Record<TransactionCode, string> = {
+export const TRANSACTION_LABELS: Record<string, string> = {
   P: "Used Personal Cash",
   S: "Insider Selling",
   A: "Company Award",
+  M: "Option Exercise",
+  G: "Gift",
+  F: "Tax Withholding",
 };
 
 // ---------------------------------------------------------------------------
@@ -345,11 +348,11 @@ const TRANSACTION_LABELS: Record<TransactionCode, string> = {
 //   Code A (Award): always low (10-30), company-initiated
 // ---------------------------------------------------------------------------
 
-function scoreConviction(
-  code: TransactionCode,
+export function scoreConviction(
+  code: string,
   percentageChange: number,
 ): number {
-  switch (code) {
+  switch (code.toUpperCase()) {
     case "P": {
       if (percentageChange >= 50) return 98;
       if (percentageChange >= 25) return 92;
@@ -362,7 +365,8 @@ function scoreConviction(
       if (percentageChange >= 20) return 55;
       return Math.max(20, Math.round(percentageChange * 2.5));
     }
-    case "A": {
+    default: {
+      // A, M, G, F and other codes — low conviction
       return Math.min(30, Math.round(10 + percentageChange * 0.5));
     }
   }
@@ -503,6 +507,74 @@ export function calculateConfidenceScore(ticker: string): ConfidenceResult {
   }
 
   // Clamp 0–100
+  score = Math.max(0, Math.min(100, score));
+
+  let label: ConfidenceResult["label"];
+  if (score <= 30) label = "Caution";
+  else if (score <= 70) label = "Neutral";
+  else label = "High Confidence";
+
+  return { score, label, signals };
+}
+
+/** Build a confidence score from an array of ProcessedTrade objects */
+export function calculateConfidenceFromTrades(
+  trades: ProcessedTrade[],
+): ConfidenceResult {
+  let score = 50;
+  const signals: ConfidenceSignal[] = [];
+
+  const buys = trades.filter((t) => t.transactionCode === "P");
+  const uniqueBuyers = new Set(buys.map((t) => t.insiderName));
+
+  if (uniqueBuyers.size >= 3) {
+    score += 30;
+    signals.push({
+      emoji: "\uD83D\uDD25",
+      text: `Cluster Buy (${uniqueBuyers.size} Insiders)`,
+      points: 30,
+    });
+  }
+
+  const execBuyers = buys.filter(
+    (t) =>
+      t.role.toUpperCase().includes("CEO") ||
+      t.role.toUpperCase().includes("CFO") ||
+      t.role.toUpperCase().includes("CHIEF"),
+  );
+  if (execBuyers.length > 0) {
+    score += 20;
+    signals.push({
+      emoji: "\u2705",
+      text: `${execBuyers[0].insiderName} (${execBuyers[0].role}) Buying Detected`,
+      points: 20,
+    });
+  }
+
+  const bigBuys = buys.filter((t) => t.percentageChange > 10);
+  if (bigBuys.length > 0) {
+    score += 15;
+    const biggest = bigBuys.reduce((a, b) =>
+      a.percentageChange > b.percentageChange ? a : b,
+    );
+    signals.push({
+      emoji: "\uD83D\uDCAA",
+      text: `${biggest.insiderName} increased stake by ${Math.round(biggest.percentageChange)}%`,
+      points: 15,
+    });
+  }
+
+  const sells = trades.filter((t) => t.transactionCode === "S");
+  if (sells.length > 0) {
+    const penalty = sells.length * 20;
+    score -= penalty;
+    signals.push({
+      emoji: "\u26A0\uFE0F",
+      text: `${sells.length} Insider Sale${sells.length > 1 ? "s" : ""} Detected`,
+      points: -penalty,
+    });
+  }
+
   score = Math.max(0, Math.min(100, score));
 
   let label: ConfidenceResult["label"];

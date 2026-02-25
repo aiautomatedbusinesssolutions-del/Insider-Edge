@@ -5,46 +5,7 @@ import {
   getSectorSentiment,
   type SectorSentiment,
 } from "@/lib/mock-sec-service";
-
-function formatDollars(value: number): string {
-  if (value >= 1_000_000) return `$${(value / 1_000_000).toFixed(1)}M`;
-  if (value >= 1_000) return `$${(value / 1_000).toFixed(0)}K`;
-  return `$${value.toFixed(0)}`;
-}
-
-function getGlowStyles(s: SectorSentiment) {
-  if (s.direction === "neutral" || s.glowLevel === 0) {
-    return {
-      card: "border-slate-800 bg-slate-900",
-      label: "text-slate-400",
-      flow: "text-slate-500",
-      glow: "",
-    };
-  }
-
-  if (s.direction === "buying") {
-    const opacity = Math.min(10 + s.glowLevel * 6, 40);
-    const borderOpacity = 20 + s.glowLevel * 16;
-    const shadowStrength = s.glowLevel * 3;
-    return {
-      card: `bg-emerald-500/${opacity} border-emerald-500/${borderOpacity}`,
-      label: "text-emerald-300",
-      flow: "text-emerald-400",
-      glow: `shadow-[0_0_${shadowStrength}px_rgba(16,185,129,0.${Math.min(s.glowLevel * 15, 60)})]`,
-    };
-  }
-
-  // selling
-  const opacity = Math.min(10 + s.glowLevel * 6, 40);
-  const borderOpacity = 20 + s.glowLevel * 16;
-  const shadowStrength = s.glowLevel * 3;
-  return {
-    card: `bg-rose-500/${opacity} border-rose-500/${borderOpacity}`,
-    label: "text-rose-300",
-    flow: "text-rose-400",
-    glow: `shadow-[0_0_${shadowStrength}px_rgba(244,63,94,0.${Math.min(s.glowLevel * 15, 60)})]`,
-  };
-}
+import { formatDollars } from "@/lib/format";
 
 // Pre-compute Tailwind classes so they're not purged
 const BUYING_TIERS: Record<number, { card: string; glow: string }> = {
