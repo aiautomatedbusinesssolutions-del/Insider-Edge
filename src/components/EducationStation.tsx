@@ -1,4 +1,4 @@
-import { BookOpen, ShieldCheck, Clock, Gauge } from "lucide-react";
+import { BookOpen, ShieldCheck, Clock, Gauge, Scale } from "lucide-react";
 
 const LESSONS = [
   {
@@ -21,6 +21,12 @@ const LESSONS = [
     title: "Think in Months, Not Minutes",
     body: "Insider signals are long-term indicators, typically playing out over 60–180 days. A CEO buying shares isn't a day-trade tip — it's a bet on the company's future over the next 2–6 months. Patience is the edge.",
   },
+  {
+    icon: Scale,
+    title: "The Ownership Ratio",
+    body: "Context is King. A $1M buy sounds big, but if the CEO already owns $1B, it's only a 0.1% increase. We look for \"Skin in the Game\" — when an insider increases their total stake by 5% or more, it's a high-conviction signal. Conversely, small sales are often just for taxes or \"vesting\" and shouldn't be feared.",
+    proTip: "Watch the % Change, not just the $.",
+  },
 ] as const;
 
 export default function EducationStation() {
@@ -37,7 +43,7 @@ export default function EducationStation() {
       </div>
 
       {/* Card grid */}
-      <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+      <div className="grid grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-3">
         {LESSONS.map((lesson) => (
           <div
             key={lesson.title}
@@ -61,6 +67,18 @@ export default function EducationStation() {
               <p className="text-sm leading-relaxed text-slate-400">
                 {lesson.body}
               </p>
+
+              {/* Pro Tip badge */}
+              {"proTip" in lesson && lesson.proTip && (
+                <div className="mt-4 flex items-center gap-2 rounded-lg border border-sky-500/20 bg-sky-500/5 px-3 py-2">
+                  <span className="shrink-0 rounded bg-sky-500/20 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-sky-400">
+                    Pro Tip
+                  </span>
+                  <p className="text-xs font-medium text-sky-300">
+                    {lesson.proTip}
+                  </p>
+                </div>
+              )}
             </div>
           </div>
         ))}
